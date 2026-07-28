@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mojo-xxhash"
+version = "0.1.0"
+description = "Mojo implementations of XXH32, XXH64, and XXH3-64"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+[tool.setuptools]
+package-dir = {"" = "python"}
+
+[tool.setuptools.packages.find]
+where = ["python"]
