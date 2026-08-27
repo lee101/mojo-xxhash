@@ -346,7 +346,7 @@ def scramble[acc_origin: MutOrigin, secret_origin: MutOrigin](
 
 
 def xxh3_long(p: BPtr, n: Int, seed: UInt64) -> UInt64:
-    var secret: InlineArray[UInt64, 24] = [
+    var secret: Array[UInt64, 24] = [
         0xBE4BA423396CFEB8, 0x1CAD21F72C81017C,
         0xDB979083E96DD4DE, 0x1F67B3B7A4A44072,
         0x78E5C0CC4EE679CB, 0x2172FFCC7DD05A82,
@@ -368,7 +368,7 @@ def xxh3_long(p: BPtr, n: Int, seed: UInt64) -> UInt64:
                 secret[i] -= seed
 
     var secret_ptr = UnsafePointer(to=secret[0])
-    var acc = InlineArray[UInt64, 8](fill=0)
+    var acc = Array[UInt64, 8](fill=0)
     acc[0] = UInt64(P32_3)
     acc[1] = P64_1
     acc[2] = P64_2
