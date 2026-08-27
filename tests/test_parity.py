@@ -89,6 +89,15 @@ def test_simd_stripes_and_scalar_tails(algorithm, length):
     assert ours == expected
 
 
+@pytest.mark.parametrize("length", (16, 17, 31, 32, 33, 4099))
+@pytest.mark.parametrize("seed", (0, 0xFFFFFFFF))
+def test_xxh32_independent_lanes_and_tails(length, seed):
+    data = data_for(length)
+    assert mojo.xxh32_intdigest(data, seed=seed) == upstream.xxh32_intdigest(
+        data, seed=seed
+    )
+
+
 @pytest.mark.parametrize("algorithm", ALGORITHMS)
 def test_contiguous_numpy_buffers_match_upstream(algorithm):
     data = np.arange(4099, dtype=np.uint8)

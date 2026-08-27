@@ -13,9 +13,6 @@ _U32 = ctypes.c_uint32
 _U64 = ctypes.c_uint64
 _lib: ctypes.PyDLL | None = None
 _symbols: dict[str, ctypes._CFuncPtr] = {}
-_bytes_address = ctypes.pythonapi.PyBytes_AsString
-_bytes_address.argtypes = [ctypes.py_object]
-_bytes_address.restype = ctypes.c_void_p
 
 
 class _PyBuffer(ctypes.Structure):
@@ -51,11 +48,11 @@ def lib() -> ctypes.PyDLL:
         # exporter-owned storage; releasing the GIL would let another thread
         # resize a bytearray and invalidate that pointer while Mojo is reading.
         loaded = ctypes.PyDLL(str(LIB_PATH))
-        loaded.mojo_xxh32.argtypes = [_I64, _I64, _U32]
+        loaded.mojo_xxh32.argtypes = [ctypes.c_char_p, _I64, _U32]
         loaded.mojo_xxh32.restype = _U32
-        loaded.mojo_xxh64.argtypes = [_I64, _I64, _U64]
+        loaded.mojo_xxh64.argtypes = [ctypes.c_char_p, _I64, _U64]
         loaded.mojo_xxh64.restype = _U64
-        loaded.mojo_xxh3_64.argtypes = [_I64, _I64, _U64]
+        loaded.mojo_xxh3_64.argtypes = [ctypes.c_char_p, _I64, _U64]
         loaded.mojo_xxh3_64.restype = _U64
         _lib = loaded
         _symbols = {
@@ -70,13 +67,13 @@ def hash_bytes(symbol: str, data: object, seed: int) -> int:
     lib()
     function = _symbols[symbol]
     if isinstance(data, bytes):
-        return int(function(_bytes_address(data), len(data), seed))
+        return int(function(data, len(data), seed))
     view = _PyBuffer()
     # PyBUF_SIMPLE requests a C-contiguous byte view.  view.len is the number
     # of bytes, independent of the exporter's element dtype and dimensions.
     _get_buffer(data, ctypes.byref(view), 0)
     try:
-        address = view.buf or _bytes_address(b"")
+        address = ctypes.cast(view.buf, ctypes.c_char_p) if view.buf else b""
         return int(function(address, view.len, seed))
     finally:
         _release_buffer(ctypes.byref(view))

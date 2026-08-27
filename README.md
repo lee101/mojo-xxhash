@@ -59,28 +59,35 @@ was slower.
 
 | Algorithm | Input | Mojo | Upstream xxhash | Mojo / upstream |
 |---|---:|---:|---:|---:|
-| xxh32 | 64 B | 3.52 us | 0.30 us | 0.09x |
-| xxh32 | 4 KiB | 0.91 GB/s | 4.29 GB/s | 0.21x |
-| xxh32 | 1 MiB | 2.77 GB/s | 5.30 GB/s | 0.52x |
-| xxh32 | 16 MiB | 2.38 GB/s | 3.86 GB/s | 0.62x |
-| xxh64 | 64 B | 2.09 us | 0.21 us | 0.10x |
-| xxh64 | 4 KiB | 1.74 GB/s | 6.82 GB/s | 0.25x |
-| xxh64 | 1 MiB | 10.49 GB/s | 10.87 GB/s | 0.96x |
-| xxh64 | 16 MiB | 9.86 GB/s | 9.16 GB/s | 1.08x |
-| xxh3_64 | 64 B | 1.98 us | 0.20 us | 0.10x |
-| xxh3_64 | 4 KiB | 1.74 GB/s | 7.04 GB/s | 0.25x |
-| xxh3_64 | 1 MiB | 12.35 GB/s | 10.65 GB/s | 1.16x |
-| xxh3_64 | 16 MiB | 12.12 GB/s | 10.51 GB/s | 1.15x |
+| xxh32 | 64 B | 1.36 us | 0.19 us | 0.14x |
+| xxh32 | 4 KiB | 2.05 GB/s | 4.66 GB/s | 0.44x |
+| xxh32 | 1 MiB | 6.09 GB/s | 5.71 GB/s | 1.07x |
+| xxh32 | 16 MiB | 5.73 GB/s | 5.59 GB/s | 1.03x |
+| xxh64 | 64 B | 1.41 us | 0.21 us | 0.15x |
+| xxh64 | 4 KiB | 2.35 GB/s | 7.77 GB/s | 0.30x |
+| xxh64 | 1 MiB | 11.29 GB/s | 10.95 GB/s | 1.03x |
+| xxh64 | 16 MiB | 11.29 GB/s | 11.18 GB/s | 1.01x |
+| xxh3_64 | 64 B | 1.37 us | 0.18 us | 0.13x |
+| xxh3_64 | 4 KiB | 2.53 GB/s | 7.64 GB/s | 0.33x |
+| xxh3_64 | 1 MiB | 13.46 GB/s | 11.97 GB/s | 1.12x |
+| xxh3_64 | 16 MiB | 13.42 GB/s | 11.12 GB/s | 1.21x |
 
-The fixed ctypes cost is visible on short inputs. XXH32 remains slower in this
-run, while the largest XXH64 input and large XXH3 inputs exceed upstream
-throughput. XXH32 uses
-four independent SIMD recurrence lanes, and XXH3 updates and scrambles its
-accumulator lanes in SIMD groups. Both retain scalar
-remainder handling for inputs that end between full stripes.
+The fixed ctypes cost is visible on short inputs. Bytes now cross ctypes
+directly instead of making a second ctypes call to obtain their address.
+XXH32 keeps four independent scalar recurrence lanes so Broadwell can overlap
+its integer multiplies; packing them into one SIMD value created a slower
+high-latency `vpmulld` dependency chain. XXH3 updates and scrambles its
+accumulator lanes at the native float64 SIMD width, with scalar remainder
+handling for inputs that end between full groups. In the final run, XXH32 and
+XXH64 reached upstream parity on large inputs and XXH3 remained ahead. Absolute
+1 MiB/16 MiB XXH64 and XXH3 throughput was lower than the initial run despite
+unchanged kernel structure, reflecting the run-to-run contention visible on
+this shared machine.
 
 There is no parallel or GPU path. A single digest has order-dependent block
-state, and this port only implements the CPU algorithms.
+state, so its blocks are not independent parallel work. These hashes also have
+low arithmetic intensity, and device transfer plus launch overhead would cost
+more than a GPU could recover.
 
 ## How it works
 

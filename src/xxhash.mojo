@@ -1,5 +1,8 @@
 """One-shot XXH32, XXH64, and XXH3-64 kernels exposed through a C ABI."""
 
+from std.sys import inlined_assembly
+from std.sys.info import simd_width_of as simdwidthof
+
 comptime BPtr = UnsafePointer[UInt8, AnyOrigin[mut=True]]
 
 comptime P32_1: UInt32 = 0x9E3779B1
@@ -56,33 +59,33 @@ def swap64(v: UInt64) -> UInt64:
 
 
 def xxh32_round(acc: UInt32, lane: UInt32) -> UInt32:
-    return rotl32(acc + lane * P32_2, 13) * P32_1
+    return inlined_assembly[
+        "imull $$0x85ebca77, $0; addl $1, $0; roll $$13, $0; imull $$0x9e3779b1, $0",
+        UInt32,
+        constraints="=r,r,0",
+        has_side_effect=False,
+    ](acc, lane)
 
 
 def xxh32_impl(p: BPtr, n: Int, seed: UInt32) -> UInt32:
-    # XXH32 has exactly four recurrence lanes.
-    comptime W = 4
     var i = 0
     var h: UInt32
     if n >= 16:
-        var lanes = SIMD[DType.uint32, W](
-            seed + P32_1 + P32_2,
-            seed + P32_2,
-            seed,
-            seed - P32_1,
-        )
+        var v1 = seed + P32_1 + P32_2
+        var v2 = seed + P32_2
+        var v3 = seed
+        var v4 = seed - P32_1
         while i <= n - 16:
-            var data = (p + i).bitcast[UInt32]().load[
-                width=W, alignment=1
-            ]()
-            lanes += data * P32_2
-            lanes = ((lanes << 13) | (lanes >> 19)) * P32_1
+            v1 = xxh32_round(v1, read32(p, i))
+            v2 = xxh32_round(v2, read32(p, i + 4))
+            v3 = xxh32_round(v3, read32(p, i + 8))
+            v4 = xxh32_round(v4, read32(p, i + 12))
             i += 16
         h = (
-            rotl32(lanes[0], 1)
-            + rotl32(lanes[1], 7)
-            + rotl32(lanes[2], 12)
-            + rotl32(lanes[3], 18)
+            rotl32(v1, 1)
+            + rotl32(v2, 7)
+            + rotl32(v3, 12)
+            + rotl32(v4, 18)
         )
     else:
         h = seed + P32_5
@@ -298,8 +301,7 @@ def accumulate[acc_origin: MutOrigin, secret_origin: MutOrigin](
     secret_offset: Int,
     secret: UnsafePointer[UInt64, secret_origin],
 ):
-    # Pairwise lane swaps below require four lanes.
-    comptime W = 4
+    comptime W = simdwidthof[DType.float64]()
     var lane = 0
     while lane <= 8 - W:
         var data = (p + input_offset + lane * 8).bitcast[UInt64]().load[
@@ -329,7 +331,7 @@ def scramble[acc_origin: MutOrigin, secret_origin: MutOrigin](
     acc: UnsafePointer[UInt64, acc_origin],
     secret: UnsafePointer[UInt64, secret_origin],
 ):
-    comptime W = 4
+    comptime W = simdwidthof[DType.float64]()
     var lane = 0
     while lane <= 8 - W:
         var values = acc.load[width=W](lane)
